@@ -2,6 +2,7 @@
 Documentation    Image recognition
 Library    SeleniumLibrary
 Library    Functions.py
+Library    String
 
 *** Variables ***
 ${ImagesPath}    ${CURDIR}${/}ImagesTest
@@ -30,17 +31,31 @@ Image recognition test
         #Exit For Loop If    ${percentage} > 90
         ${num} =     Evaluate    int(${num}) + int(${num1})
         ${strNum} =    Builtin.Convert To String    ${num}
-        ${nameImage} =     Catenate       ${Captures_url}    strip(${strNum})
-        ${nameImage} =     Catenate    SEPARATOR=    ${nameImage}    .png
-        ${percentage} =    ImageMatchPercentage     ${CURDIR}${/}ImagesTest/pwScreenShoot.png     https://opensource-demo.orangehrmlive.com/web/index.php/auth/login    ${i}     ${nameImage}       #  #ImagesTest/imageToCompare.png
+        ${strNum} =    String.Remove String     ${strNum}     ${SPACE}     ${EMPTY}
+        ${nameImage} =     Catenate    SEPARATOR=       ${Captures_url}    ${strNum}
+        ${nameImage} =     Catenate      SEPARATOR=      ${nameImage}    .png
+        #${percentage} =    ImageMatchPercentage     ${CURDIR}${/}ImagesTest/pwScreenShoot.png         https://opensource-demo.orangehrmlive.com/web/index.php/auth/login        ${i}         ${nameImage} 
+        ${percentages} =   Using_methods_IR         ImagesTest/pwScreenShoot.png     https://opensource-demo.orangehrmlive.com/web/index.php/auth/login    ${i}     ${nameImage} 
         
         #Present the percentage
-        ${int} =    Builtin.Convert To Integer   ${percentage}
-        ${str} =    Builtin.Convert To String    ${int}
-        ${frase}=    Catenate    Percentage Similarity -->   ${str}
-        ${frase}=    Catenate    ${frase}    %
-
+        #${int} =    Builtin.Convert To Integer   ${percentage}
         Log To Console  ${i}
+
+        ${str} =    Builtin.Convert To String    ${percentages}[0]
+        ${frase}=    Catenate    Percentage Similarity SSIM -->   ${str}
+        ${frase}=    Catenate    ${frase}    %
+        Log To Console   ${frase}
+        ${str} =    Builtin.Convert To String    ${percentages}[1]
+        ${frase}=    Catenate    Percentage Similarity RMSE -->   ${str}
+        ${frase}=    Catenate    ${frase}    %
+        Log To Console   ${frase}
+        ${str} =    Builtin.Convert To String    ${percentages}[2]
+        ${frase}=    Catenate    Percentage Similarity SRE -->   ${str}
+        ${frase}=    Catenate    ${frase}    %
+        Log To Console   ${frase}
+        ${str} =    Builtin.Convert To String    ${percentages}[3]
+        ${frase}=    Catenate    Percentage Similarity Match points -->   ${str}
+        ${frase}=    Catenate    ${frase}    %
         Log To Console   ${frase}
     END
     

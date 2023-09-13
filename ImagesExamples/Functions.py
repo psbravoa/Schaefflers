@@ -1,9 +1,11 @@
 from PIL import Image, ImageChops
+import os
 import cv2
 import numpy as np
 import matplotlib.pyplot as plt
 import re
 from playwright.sync_api import Page, expect, sync_playwright
+from image_similarity_measures.quality_metrics import rmse, ssim, sre
 
 
 
@@ -79,7 +81,6 @@ def CompareTwoImages(Im1, Im2):
         
     return actual_error
 
-
 def ImageMatchSIFT(im1, im2):
     img1 = cv2.imread(im1)  
     img2 = cv2.imread(im2) 
@@ -101,26 +102,11 @@ def ImageMatchSIFT(im1, im2):
 
     img3 = cv2.drawMatches(img1, keypoints_1, img2, keypoints_2, matches[:50], img2, flags=2)
     plt.imshow(img3),plt.show()
-    
 
-
-
-
-def ImageMatchPercentage(Img1, url, xpath, Image2Name):
-    
-    playwright= sync_playwright().start()
-    browser = playwright.chromium.launch(headless=False, slow_mo=1000)
-    page = browser.new_page()
-    page.goto(url)
-    if url == xpath:
-        #Image2Name = "ImagesTest/pwScreenShoot.png"
-        page.screenshot(path= Image2Name)
-        image_to_compare = cv2.imread(Image2Name)
-    else:
-        page.locator(xpath).screenshot(path=Image2Name)
-        image_to_compare = cv2.imread(Image2Name)
-    
+def Get_percentage_match_points(Img1, Image2Name):
+    image_to_compare = cv2.imread(Image2Name)
     original= cv2.imread(Img1)
+
     # Create sift - SIFT (Scale Invariant Feature Transform) technique.
     sift = cv2.SIFT_create()
     Kp_1, desc_1 = sift.detectAndCompute(original, None)
@@ -165,7 +151,7 @@ def ImageMatchPercentage(Img1, url, xpath, Image2Name):
     
     percentajeSimilarity = 0
     print("Title: " + Image2Name)
-    percentajeSimilarity = (len(good_points) / number_keypoints) * 100
+    percentajeSimilarity = int((len(good_points) / number_keypoints) * 100)
     print("Similarity: " + str(int(percentajeSimilarity)) + "%\n")
 
     text_label = str("Matching images percentage --> " + str(int(percentajeSimilarity))+"%")
@@ -177,12 +163,7 @@ def ImageMatchPercentage(Img1, url, xpath, Image2Name):
     plt.imshow(image_to_compare)
     plt.show(block=True)
 
-    browser.close()
-    playwright.stop()
-
     return  percentajeSimilarity
-    #return CompareTwoImages(Img1, Image2Name)
-    
     
 def GetShapeImage(Img1, Img2):
 
@@ -214,5 +195,117 @@ def GetShapeImage(Img1, Img2):
     print('Number of Channels : ',channels)
 
 
+
+def Using_methods_IR(Img1, url, xpath, Image2Name):
+    CaptureImage(Img1, url, xpath, Image2Name)
+    percentajeSimilaritySSIM = get_best_ssim(Img1, Image2Name)
+    percentajeSimilarityRMSE = get_best_rmse(Img1, Image2Name)
+    percentajeSimilaritySRE = get_best_sre(Img1, Image2Name)
+    percentajeSimilarityMP = Get_percentage_match_points(Img1, Image2Name)
+    return [percentajeSimilaritySSIM, percentajeSimilarityRMSE, percentajeSimilaritySRE, percentajeSimilarityMP]
+
+
+def CaptureImage(Img1, url, xpath, Image2Name):
+    playwright= sync_playwright().start()
+    browser = playwright.chromium.launch(headless=False, slow_mo=1000)
+    page = browser.new_page()
+    page.goto(url)
+    if url == xpath:
+        page.screenshot(path= Image2Name)
+    else:
+        page.locator(xpath).screenshot(path=Image2Name)
+    browser.close()
+    playwright.stop() 
+
+def get_best_ssim(test_image_path: str, image_dir: str) -> float:
+    '''
+    Evaluates SSIM (Structural similarity) between a given test image and all the images in a directory.
+    Parameters:
+    - test_image_path (str): Path to the test image.
+    - image_dir (str): Path to the images directory.
+    '''
+    test_image = cv2.imread(test_image_path)
+    scale_percent = 100
+    width = int(test_image.shape[1] * scale_percent / 100)
+    height = int(test_image.shape[0] * scale_percent / 100)
+    dim = (width, height)
+
+    data_image = cv2.imread(image_dir)
+    resized_image = cv2.resize(data_image, dim, interpolation = cv2.INTER_AREA)
+    percentage = ssim(test_image, resized_image)
+    percentage = int(percentage * 100)
+
+    text_label = str("Matching images percentage --> " + str(percentage)+"%")
+    f = plt.figure()
+    plt.suptitle(text_label)
+    f.add_subplot(1,2,1)
+    plt.imshow(test_image)
+    f.add_subplot(1,2,2)
+    plt.imshow(data_image)
+    plt.show(block=True)
+
+    return percentage
+        
+
+def get_best_rmse(test_image_path: str, image_dir: str) -> float:
+    '''
+    Evaluates RMSE (Root-Mean-Squared Error) between a given test image and all the images in a directory.
+    Parameters:
+    - test_image_path (str): Path to the test image.
+    - image_dir (str): Path to the images directory.
+    '''
+    test_image = cv2.imread(test_image_path)
+    scale_percent = 100
+    width = int(test_image.shape[1] * scale_percent / 100)
+    height = int(test_image.shape[0] * scale_percent / 100)
+    dim = (width, height)
+
+    data_image = cv2.imread(image_dir)
+    resized_image = cv2.resize(data_image, dim, interpolation = cv2.INTER_AREA)
+    percentage = rmse(test_image, resized_image)
+
+    text_label = str("Error metric (0=perfect match) --> " + str(percentage))
+    f = plt.figure()
+    plt.suptitle(text_label)
+    f.add_subplot(1,2,1)
+    plt.imshow(test_image)
+    f.add_subplot(1,2,2)
+    plt.imshow(data_image)
+    plt.show(block=True)
+
+    return percentage
+        
+
+def get_best_sre(test_image_path: str, image_dir: str) -> float:
+    '''
+    Evaluates SRE (Signal to Reconstruction Error Ratio) between a given test image and all the images in a directory.
+    Parameters:
+    - test_image_path (str): Path to the test image.
+    - image_dir (str): Path to the images directory.
+    '''
+    test_image = cv2.imread(test_image_path)
+    scale_percent = 100
+    width = int(test_image.shape[1] * scale_percent / 100)
+    height = int(test_image.shape[0] * scale_percent / 100)
+    dim = (width, height)
+
+    data_image = cv2.imread(image_dir)
+    resized_image = cv2.resize(data_image, dim, interpolation = cv2.INTER_AREA)
+    percentage = sre(test_image, resized_image)
+    percentage = int(percentage)
+    
+    text_label = str("Matching images percentage --> " + str(percentage)+"%")
+    f = plt.figure()
+    plt.suptitle(text_label)
+    f.add_subplot(1,2,1)
+    plt.imshow(test_image)
+    f.add_subplot(1,2,2)
+    plt.imshow(data_image)
+    plt.show(block=True)
+
+    return percentage
+
 #ImageMatchSIFT("ImagesTest/page.png", "ImagesTest/1.png")
 #GetShapeImage("ImagesTest/page.png", "ImagesTest/1.png")
+#porcentaje = get_best_ssim("ImagesTest/page.png", "ImagesTest/1.png")
+#print(porcentaje)
